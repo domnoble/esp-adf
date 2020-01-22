@@ -86,3 +86,7 @@ Check folder [examples](examples) that contains sample applications to demonstra
 * The [esp32.com forum](https://esp32.com/) is a place to ask questions and find community resources. On the forum there is a [section dedicated to ESP-ADF](https://esp32.com/viewforum.php?f=20) users.
 * [Check the Issues section on github](https://github.com/espressif/esp-adf/issues) if you find a bug or have a feature request. Please check existing Issues before opening a new one.
 * If you're interested in contributing to ESP-ADF, please check the [Contributions Guide](https://esp-idf.readthedocs.io/en/latest/contribute/index.html).
+
+##### ESP-Audio-Kit
+
+Modified for use with ESP-Audio-Kit, AC101 codec, Ai Thinker's ESP32-A1S 
