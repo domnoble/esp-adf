@@ -29,19 +29,20 @@
 #define SDCARD_INTR_GPIO          GPIO_NUM_34
 
 #define BUTTON_REC_ID             GPIO_NUM_36
-#define BUTTON_MODE_ID            GPIO_NUM_39
-#define BUTTON_SET_ID             TOUCH_PAD_NUM9
-#define BUTTON_PLAY_ID            TOUCH_PAD_NUM8
-#define BUTTON_VOLUP_ID           TOUCH_PAD_NUM7
-#define BUTTON_VOLDOWN_ID         TOUCH_PAD_NUM4
+#define BUTTON_MODE_ID            GPIO_NUM_13
+#define BUTTON_SET_ID             GPIO_NUM_19
+#define BUTTON_PLAY_ID            GPIO_NUM_23
+#define BUTTON_VOLUP_ID           GPIO_NUM_18
+#define BUTTON_VOLDOWN_ID         GPIO_NUM_5 
 
-#define AUXIN_DETECT_GPIO         GPIO_NUM_12
+#define AUXIN_DETECT_GPIO         GPIO_NUM_39
 #define HEADPHONE_DETCET          GPIO_NUM_19
+
 #define PA_ENABLE_GPIO            GPIO_NUM_21
 
 #define GREEN_LED_GPIO            GPIO_NUM_22
 
-extern audio_hal_func_t AUDIO_CODEC_ES8388_DEFAULT_HANDLE;
+extern audio_hal_func_t AUDIO_CODEC_AC101_DEFAULT_HANDLE;
 
 #define AUDIO_CODEC_DEFAULT_CONFIG(){                   \
         .adc_input  = AUDIO_HAL_ADC_INPUT_LINE1,        \

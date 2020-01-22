@@ -29,10 +29,6 @@
 #include "audio_hal.h"
 #include "esxxx_common.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* ES8374 address */
 #define ES8374_ADDR 0x20  // 0x22:CE=1;0x20:CE=0
 
@@ -150,8 +146,9 @@ esp_err_t es8374_set_voice_mute(bool enable);
  * @brief Get ES8374 DAC mute status
  *
  * @return
- *     - ESP_FAIL
- *     - ESP_OK
+ *     - -1: Parameter error
+ *     -  0: Voice is unmuted
+ *     -  1: Voice is muted
  */
 esp_err_t es8374_get_voice_mute(void);
 
@@ -204,7 +201,7 @@ esp_err_t es8374_write_reg(uint8_t reg_add, uint8_t data);
  * @brief Print all ES8374 registers
  *
  * @return
- *    - void
+ *     - void
  */
 void es8374_read_all();
 
@@ -241,10 +238,6 @@ esp_err_t es8374_codec_ctrl_state(audio_hal_codec_mode_t mode, audio_hal_ctrl_t 
  *     - void
  */
 void es8374_pa_power(bool enable);
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif  //__ES8374_H__
 

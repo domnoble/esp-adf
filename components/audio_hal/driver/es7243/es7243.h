@@ -28,10 +28,6 @@
 #include "esp_err.h"
 #include "audio_hal.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /**
  * @brief Initialize ES7243 adc chip
  *
@@ -108,9 +104,4 @@ esp_err_t es7243_adc_set_voice_volume(int volume);
  *     - ESP_FAIL
  */
 esp_err_t es7243_adc_get_voice_volume(int *volume);
-
-#ifdef __cplusplus
-}
-#endif
-
 #endif

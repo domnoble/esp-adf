@@ -29,14 +29,14 @@
 #include "audio_error.h"
 #include "audio_mem.h"
 
-static const char *TAG = "LYRAT_MINI_V1_1";
+static const char *TAG = "AI_AUDIO_V1_0";
 
 esp_err_t get_i2c_pins(i2c_port_t port, i2c_config_t *i2c_config)
 {
     AUDIO_NULL_CHECK(TAG, i2c_config, return ESP_FAIL);
     if (port == I2C_NUM_0 || port == I2C_NUM_1) {
-        i2c_config->sda_io_num = GPIO_NUM_18;
-        i2c_config->scl_io_num = GPIO_NUM_23;
+        i2c_config->sda_io_num = GPIO_NUM_33;
+        i2c_config->scl_io_num = GPIO_NUM_32;
     } else {
         i2c_config->sda_io_num = -1;
         i2c_config->scl_io_num = -1;
@@ -49,22 +49,16 @@ esp_err_t get_i2c_pins(i2c_port_t port, i2c_config_t *i2c_config)
 esp_err_t get_i2s_pins(i2s_port_t port, i2s_pin_config_t *i2s_config)
 {
     AUDIO_NULL_CHECK(TAG, i2s_config, return ESP_FAIL);
-    if (port == I2S_NUM_0) {
-        i2s_config->bck_io_num = GPIO_NUM_5;
-        i2s_config->ws_io_num = GPIO_NUM_25;
-        i2s_config->data_out_num = GPIO_NUM_26;
+    if (port == I2S_NUM_0 || port == I2S_NUM_1) {
+        i2s_config->bck_io_num = GPIO_NUM_27;
+        i2s_config->ws_io_num = GPIO_NUM_26;
+        i2s_config->data_out_num = GPIO_NUM_25;
         i2s_config->data_in_num = GPIO_NUM_35;
-    } else if (port == I2S_NUM_1) {
-        i2s_config->bck_io_num = GPIO_NUM_32;
-        i2s_config->ws_io_num = GPIO_NUM_33;
-        i2s_config->data_out_num = GPIO_NUM_26;
-        i2s_config->data_in_num = GPIO_NUM_36;
     } else {
         memset(i2s_config, -1, sizeof(i2s_pin_config_t));
         ESP_LOGE(TAG, "i2s port %d is not supported", port);
         return ESP_FAIL;
     }
-
     return ESP_OK;
 }
 
@@ -134,12 +128,12 @@ int8_t get_sdcard_open_file_num_max(void)
     return SDCARD_OPEN_FILE_NUM_MAX;
 }
 
-int8_t get_sdcard_power_ctrl_gpio(void)
-{
-    return SDCARD_PWR_CTRL;
-}
-
 // input-output pins
+
+int8_t get_auxin_detect_gpio(void)
+{
+    return AUXIN_DETECT_GPIO;
+}
 
 int8_t get_headphone_detect_gpio(void)
 {
@@ -151,7 +145,7 @@ int8_t get_pa_enable_gpio(void)
     return PA_ENABLE_GPIO;
 }
 
-// adc button id
+// button pins
 
 int8_t get_input_rec_id(void)
 {
@@ -162,6 +156,8 @@ int8_t get_input_mode_id(void)
 {
     return BUTTON_MODE_ID;
 }
+
+// touch pins
 
 int8_t get_input_set_id(void)
 {
@@ -188,9 +184,4 @@ int8_t get_input_voldown_id(void)
 int8_t get_green_led_gpio(void)
 {
     return GREEN_LED_GPIO;
-}
-
-int8_t get_blue_led_gpio(void)
-{
-    return BLUE_LED_GPIO;
 }

@@ -22,10 +22,9 @@
  *
  */
 
-#include <string.h>
 #include "esp_system.h"
 #include "esp_log.h"
-#include "i2c_bus.h"
+#include "driver/i2c.h"
 #include "es8374.h"
 #include "board_pins_config.h"
 
@@ -40,7 +39,13 @@
 #define LOG_8374(fmt, ...)   ESP_LOGW(ES8374_TAG, fmt, ##__VA_ARGS__)
 
 static int codec_init_flag = 0;
-static i2c_bus_handle_t i2c_handle;
+
+static i2c_config_t es_i2c_cfg = {
+    .mode = I2C_MODE_MASTER,
+    .sda_pullup_en = GPIO_PULLUP_ENABLE,
+    .scl_pullup_en = GPIO_PULLUP_ENABLE,
+    .master.clk_speed = 100000
+};
 
 audio_hal_func_t AUDIO_CODEC_ES8374_DEFAULT_HANDLE = {
     .audio_codec_initialize = es8374_codec_init,
@@ -57,42 +62,68 @@ static bool es8374_codec_initialized()
     return codec_init_flag;
 }
 
-static esp_err_t es_write_reg(uint8_t slave_addr, uint8_t reg_add, uint8_t data)
+int es_write_reg(uint8_t slaveAdd, uint8_t regAdd, uint8_t data)
 {
-    return i2c_bus_write_bytes(i2c_handle, slave_addr, &reg_add, sizeof(reg_add), &data, sizeof(data));
+    int res = 0;
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    res |= i2c_master_start(cmd);
+    res |= i2c_master_write_byte(cmd, slaveAdd, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_write_byte(cmd, regAdd, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_write_byte(cmd, data, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_stop(cmd);
+    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+    ES_ASSERT(res, "ESCodecWriteReg error", -1);
+    return res;
 }
 
-static esp_err_t es_read_reg(uint8_t slave_addr, uint8_t reg_add, uint8_t *p_data)
+int es_read_reg(uint8_t slaveAdd, uint8_t regAdd, uint8_t *pData)
 {
-    return i2c_bus_read_bytes(i2c_handle, slave_addr, reg_add, p_data, 1);
+    uint8_t data;
+    int res = 0;
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    res |= i2c_master_start(cmd);
+    res |= i2c_master_write_byte(cmd, slaveAdd, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_write_byte(cmd, regAdd, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_stop(cmd);
+    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+
+    cmd = i2c_cmd_link_create();
+    res |= i2c_master_start(cmd);
+    res |= i2c_master_write_byte(cmd, slaveAdd | 0x01, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_read_byte(cmd, &data, 0x01/*NACK_VAL*/);
+    res |= i2c_master_stop(cmd);
+    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+
+    ES_ASSERT(res, "Es8374ReadReg error", -1);
+    *pData = data;
+    return res;
 }
 
 static int i2c_init()
 {
     int res;
-    i2c_config_t es_i2c_cfg = {
-        .mode = I2C_MODE_MASTER,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 100000
-    };
     res = get_i2c_pins(I2C_NUM_0, &es_i2c_cfg);
-    ES_ASSERT(res, "getting i2c pins error", -1);
-    i2c_handle = i2c_bus_create(I2C_NUM_0, &es_i2c_cfg);
+    res = i2c_param_config(I2C_NUM_0, &es_i2c_cfg);
+    res |= i2c_driver_install(I2C_NUM_0, es_i2c_cfg.mode, 0, 0, 0);
+    ES_ASSERT(res, "i2c_init error", -1);
     return res;
 }
 
-esp_err_t es8374_write_reg(uint8_t reg_add, uint8_t data)
+int es8374_write_reg(uint8_t regAdd, uint8_t data)
 {
-    return es_write_reg(ES8374_ADDR, reg_add, data);
+    return es_write_reg(ES8374_ADDR, regAdd, data);
 }
 
-int es8374_read_reg(uint8_t reg_add, uint8_t *regv)
+int es8374_read_reg(uint8_t regAdd, uint8_t *regv)
 {
     uint8_t regdata = 0xFF;
     uint8_t res = 0;
 
-    if (es_read_reg(ES8374_ADDR, reg_add, &regdata) == 0) {
+    if (es_read_reg(ES8374_ADDR, regAdd, &regdata) == 0) {
         *regv = regdata;
         return res;
     } else {
@@ -113,7 +144,7 @@ void es8374_read_all()
 
 esp_err_t es8374_set_voice_mute(bool enable)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     res |= es8374_read_reg(0x36, &reg);
@@ -125,9 +156,9 @@ esp_err_t es8374_set_voice_mute(bool enable)
     return res;
 }
 
-esp_err_t es8374_get_voice_mute(void)
+int es8374_get_voice_mute(void)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     res |= es8374_read_reg(0x36, &reg);
@@ -138,9 +169,9 @@ esp_err_t es8374_get_voice_mute(void)
     return res == ESP_OK ? reg : res;
 }
 
-esp_err_t es8374_set_bits_per_sample(es_module_t mode, es_bits_length_t bit_per_sample)
+int es8374_set_bits_per_sample(es_module_t mode, es_bits_length_t bit_per_sample)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
     int bits = (int)bit_per_sample & 0x0f;
 
@@ -162,9 +193,9 @@ esp_err_t es8374_set_bits_per_sample(es_module_t mode, es_bits_length_t bit_per_
     return res;
 }
 
-esp_err_t es8374_config_fmt(es_module_t mode, es_i2s_fmt_t fmt)
+int es8374_config_fmt(es_module_t mode, es_i2s_fmt_t fmt)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
     int fmt_tmp, fmt_i2s;
 
@@ -190,9 +221,9 @@ esp_err_t es8374_config_fmt(es_module_t mode, es_i2s_fmt_t fmt)
     return res;
 }
 
-esp_err_t es8374_start(es_module_t mode)
+int es8374_start(es_module_t mode)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     if (mode == ES_MODULE_LINE) {
@@ -242,9 +273,9 @@ esp_err_t es8374_start(es_module_t mode)
     return res;
 }
 
-esp_err_t es8374_stop(es_module_t mode)
+int es8374_stop(es_module_t mode)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     if (mode == ES_MODULE_LINE) {
@@ -287,10 +318,10 @@ esp_err_t es8374_stop(es_module_t mode)
     return res;
 }
 
-esp_err_t es8374_i2s_config_clock(es_i2s_clock_t cfg)
+int es8374_i2s_config_clock(es_i2s_clock_t cfg)
 {
 
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     res |= es8374_read_reg(0x0f, &reg);       //power up adc and input
@@ -509,9 +540,9 @@ esp_err_t es8374_i2s_config_clock(es_i2s_clock_t cfg)
     return res;
 }
 
-esp_err_t es8374_config_dac_output(es_dac_output_t output)
+int es8374_config_dac_output(es_dac_output_t output)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     reg = 0x1d;
@@ -527,9 +558,9 @@ esp_err_t es8374_config_dac_output(es_dac_output_t output)
     return res;
 }
 
-esp_err_t es8374_config_adc_input(es_adc_input_t input)
+int es8374_config_adc_input(es_adc_input_t input)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     uint8_t reg = 0;
 
     res |= es8374_read_reg(0x21, &reg);
@@ -541,9 +572,9 @@ esp_err_t es8374_config_adc_input(es_adc_input_t input)
     return res;
 }
 
-esp_err_t es8374_set_mic_gain(es_mic_gain_t gain)
+int es8374_set_mic_gain(es_mic_gain_t gain)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
 
     if (gain > MIC_GAIN_MIN && gain < MIC_GAIN_24DB) {
         int gain_n = 0;
@@ -557,9 +588,9 @@ esp_err_t es8374_set_mic_gain(es_mic_gain_t gain)
     return res;
 }
 
-esp_err_t es8374_codec_set_voice_volume(int volume)
+int es8374_codec_set_voice_volume(int volume)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
 
     if (volume < 0) {
         volume = 192;
@@ -574,9 +605,9 @@ esp_err_t es8374_codec_set_voice_volume(int volume)
     return res;
 }
 
-esp_err_t es8374_codec_get_voice_volume(int *volume)
+int es8374_codec_get_voice_volume(int *volume)
 {
-    esp_err_t res = 0;
+    int res = 0;
     uint8_t reg = 0;
 
     res = es8374_read_reg(0x38, &reg);
@@ -704,13 +735,13 @@ static int es8374_init_reg(audio_hal_codec_mode_t ms_mode, es_i2s_fmt_t fmt, es_
     return res;
 }
 
-esp_err_t es8374_codec_init(audio_hal_codec_config_t *cfg)
+int es8374_codec_init(audio_hal_codec_config_t *cfg)
 {
     if (es8374_codec_initialized()) {
         ESP_LOGW(ES8374_TAG, "The es8374 codec has already been initialized!");
         return ESP_FAIL;
     }
-    esp_err_t res = ESP_OK;
+    int res = 0;
     es_i2s_clock_t clkdiv;
 
     clkdiv.lclk_div = LCLK_DIV_256;
@@ -729,15 +760,15 @@ esp_err_t es8374_codec_init(audio_hal_codec_config_t *cfg)
     return res;
 }
 
-esp_err_t es8374_codec_deinit(void)
+int es8374_codec_deinit(void)
 {
     codec_init_flag = 0;
-    i2c_bus_delete(i2c_handle);
     return es8374_write_reg(0x00, 0x7F); // IC Reset and STOP
 }
-esp_err_t es8374_codec_config_i2s(audio_hal_codec_mode_t mode, audio_hal_codec_i2s_iface_t *iface)
+
+int es8374_codec_config_i2s(audio_hal_codec_mode_t mode, audio_hal_codec_i2s_iface_t *iface)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     int tmp = 0;
     res |= es8374_config_fmt(ES_MODULE_ADC_DAC, iface->fmt);
     if (iface->bits == AUDIO_HAL_BIT_LENGTH_16BITS) {
@@ -751,9 +782,9 @@ esp_err_t es8374_codec_config_i2s(audio_hal_codec_mode_t mode, audio_hal_codec_i
     return res;
 }
 
-esp_err_t es8374_codec_ctrl_state(audio_hal_codec_mode_t mode, audio_hal_ctrl_t ctrl_state)
+int es8374_codec_ctrl_state(audio_hal_codec_mode_t mode, audio_hal_ctrl_t ctrl_state)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     int es_mode_t = 0;
     switch (mode) {
         case AUDIO_HAL_CODEC_MODE_ENCODE:
@@ -782,19 +813,5 @@ esp_err_t es8374_codec_ctrl_state(audio_hal_codec_mode_t mode, audio_hal_ctrl_t 
     return res;
 }
 
-void es8374_pa_power(bool enable)
-{
-    gpio_config_t  io_conf;
-    memset(&io_conf, 0, sizeof(io_conf));
-    io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = BIT64(get_pa_enable_gpio());
-    io_conf.pull_down_en = 0;
-    io_conf.pull_up_en = 0;
-    gpio_config(&io_conf);
-    if (enable) {
-        gpio_set_level(get_pa_enable_gpio(), 1);
-    } else {
-        gpio_set_level(get_pa_enable_gpio(), 0);
-    }
-}
+
+

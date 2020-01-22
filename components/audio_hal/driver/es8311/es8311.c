@@ -23,7 +23,7 @@
  */
 
 #include <string.h>
-#include "i2c_bus.h"
+#include "driver/i2c.h"
 #include "board.h"
 #include "esp_log.h"
 #include "es8311.h"
@@ -50,7 +50,15 @@
 
 #define MCLK_DIV_FRE        256
 
-static i2c_bus_handle_t i2c_handle;
+/*
+ * i2c default configuration
+ */
+static i2c_config_t es_i2c_cfg = {
+    .mode = I2C_MODE_MASTER,
+    .sda_pullup_en = GPIO_PULLUP_ENABLE,
+    .scl_pullup_en = GPIO_PULLUP_ENABLE,
+    .master.clk_speed = 100000
+};
 
 /*
  * operate function of codec
@@ -194,30 +202,53 @@ static char *TAG = "DRV8311";
         return b;\
     }
 
-static esp_err_t es8311_write_reg(uint8_t reg_addr, uint8_t data)
+static int es8311_write_reg(uint8_t reg_addr, uint8_t data)
 {
-    return i2c_bus_write_bytes(i2c_handle, ES8311_ADDR, &reg_addr, sizeof(reg_addr), &data, sizeof(data));
+    int res = 0;
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    res |= i2c_master_start(cmd);
+    res |= i2c_master_write_byte(cmd, ES8311_ADDR, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_write_byte(cmd, reg_addr, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_write_byte(cmd, data, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_stop(cmd);
+    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+    ES_ASSERT(res, "Es8311 Write Reg error", -1);
+    return res;
 }
 
 static int es8311_read_reg(uint8_t reg_addr)
 {
     uint8_t data;
-    i2c_bus_read_bytes(i2c_handle, ES8311_ADDR, reg_addr, &data, 1);
+    int res = 0;
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+
+    res |= i2c_master_start(cmd);
+    res |= i2c_master_write_byte(cmd, ES8311_ADDR, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_write_byte(cmd, reg_addr, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_stop(cmd);
+    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+
+    cmd = i2c_cmd_link_create();
+    res |= i2c_master_start(cmd);
+    res |= i2c_master_write_byte(cmd, ES8311_ADDR | 0x01, 1 /*ACK_CHECK_EN*/);
+    res |= i2c_master_read_byte(cmd, &data, 0x01 /*NACK_VAL*/);
+    res |= i2c_master_stop(cmd);
+    res |= i2c_master_cmd_begin(0, cmd, 1000 / portTICK_RATE_MS);
+    i2c_cmd_link_delete(cmd);
+
+    ES_ASSERT(res, "Es8311 Read Reg error", -1);
     return (int)data;
 }
 
 static int i2c_init()
 {
     int res = 0;
-    i2c_config_t es_i2c_cfg = {
-        .mode = I2C_MODE_MASTER,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 100000,
-    };
-    res = get_i2c_pins(I2C_NUM_0, &es_i2c_cfg);
-    ES_ASSERT(res, "getting i2c pins error", -1);
-    i2c_handle = i2c_bus_create(I2C_NUM_0, &es_i2c_cfg);
+    get_i2c_pins(I2C_NUM_0, &es_i2c_cfg);
+    res |= i2c_param_config(I2C_NUM_0, &es_i2c_cfg);
+    res |= i2c_driver_install(I2C_NUM_0, es_i2c_cfg.mode, 0, 0, 0);
+    ES_ASSERT(res, "i2c_init error", -1);
     return res;
 }
 
@@ -280,7 +311,7 @@ void es8311_pa_power(bool enable)
     memset(&io_conf, 0, sizeof(io_conf));
     io_conf.intr_type = GPIO_PIN_INTR_DISABLE;
     io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = BIT64(get_pa_enable_gpio());
+    io_conf.pin_bit_mask = BIT(get_pa_enable_gpio());
     io_conf.pull_down_en = 0;
     io_conf.pull_up_en = 0;
     gpio_config(&io_conf);
@@ -481,7 +512,7 @@ esp_err_t es8311_codec_init(audio_hal_codec_config_t *codec_cfg)
 
 esp_err_t es8311_codec_deinit()
 {
-    i2c_bus_delete(i2c_handle);
+//TODO
     return ESP_OK;
 }
 
@@ -653,9 +684,9 @@ esp_err_t es8311_stop(es_module_t mode)
     return ret;
 }
 
-esp_err_t es8311_codec_set_voice_volume(int volume)
+int es8311_codec_set_voice_volume(int volume)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     if (volume < 0) {
         volume = 0;
     } else if (volume > 100) {
@@ -667,9 +698,9 @@ esp_err_t es8311_codec_set_voice_volume(int volume)
     return res;
 }
 
-esp_err_t es8311_codec_get_voice_volume(int *volume)
+int es8311_codec_get_voice_volume(int *volume)
 {
-    esp_err_t res = ESP_OK;
+    int res = ESP_OK;
     int regv = 0;
     regv = es8311_read_reg(ES8311_DAC_REG32);
     if (regv == ESP_FAIL) {
@@ -684,14 +715,15 @@ esp_err_t es8311_codec_get_voice_volume(int *volume)
 
 esp_err_t es8311_set_voice_mute(bool enable)
 {
+    int res = 0;
     ESP_LOGD(TAG, "Es8311SetVoiceMute volume:%d", enable);
     es8311_mute(enable);
-    return ESP_OK;
+    return res;
 }
 
-esp_err_t es8311_get_voice_mute(int *mute)
+int es8311_get_voice_mute(int *mute)
 {
-    esp_err_t res = ESP_OK;
+    int res = -1;
     uint8_t reg = 0;
     res = es8311_read_reg(ES8311_DAC_REG31);
     if (res != ESP_FAIL) {
@@ -703,7 +735,7 @@ esp_err_t es8311_get_voice_mute(int *mute)
 
 esp_err_t es8311_set_mic_gain(es8311_mic_gain_t gain_db)
 {
-    esp_err_t res = ESP_OK;
+    int res = 0;
     res = es8311_write_reg(ES8311_ADC_REG16, gain_db); // MIC gain scale
     return res;
 }

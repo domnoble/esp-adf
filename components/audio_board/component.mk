@@ -31,3 +31,9 @@ ifdef CONFIG_ESP_LYRAT_MINI_V1_1_BOARD
 COMPONENT_ADD_INCLUDEDIRS += ./lyrat_mini_v1_1
 COMPONENT_SRCDIRS += ./lyrat_mini_v1_1
 endif
+
+ifdef CONFIG_ESP_AI_AUDIO_V1_0_BOARD
+COMPONENT_ADD_INCLUDEDIRS += ./ai_audio_v1_0
+COMPONENT_SRCDIRS += ./ai_audio_v1_0
+endif
+

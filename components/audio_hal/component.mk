@@ -3,12 +3,15 @@
 #
 # (Uses default behaviour of compiling all source files in directory, adding 'include' to include path.)
 
-COMPONENT_ADD_INCLUDEDIRS := ./include ./driver/include
+COMPONENT_ADD_INCLUDEDIRS := ./include
 COMPONENT_SRCDIRS := .
 COMPONENT_PRIV_INCLUDEDIRS := ./driver/include
 
 COMPONENT_ADD_INCLUDEDIRS += ./driver/es8388 ./driver/es8374
 COMPONENT_SRCDIRS += ./driver/es8388 ./driver/es8374
+
+COMPONENT_ADD_INCLUDEDIRS += ./driver/ac101
+COMPONENT_SRCDIRS += ./driver/ac101
 
 COMPONENT_ADD_INCLUDEDIRS += ./driver/es8311 ./driver/es7243
 COMPONENT_SRCDIRS += ./driver/es8311 ./driver/es7243
